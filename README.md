@@ -26,9 +26,9 @@ I wanted to work with gas/particles/realistic rendering (and debated between opt
 * Cloud Shape Improvement
 
 
-CPU 				         |  GPU 		            	|
-:-------------------:|:----------------------:|
-* fafa               |  * fafa                |
+| CPU 				         |  GPU 		            	|
+|:-------------------:|:----------------------:|
+|* fafa               |  * fafa                |
 
 
 ## Reference
