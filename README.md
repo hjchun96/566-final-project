@@ -10,9 +10,9 @@ The paper I mainly referenced is [Efficient Algorithms for Real-Time GPU Volumet
 
 I wanted to work with gas/particles/realistic rendering (and debated between options of creating a setpiece with a burning Hollywood sign, colorful explosive gas, and clouds). Some inspirations and aims are shown below:
 
-![](Images/Inspiration 1.jpg)
-![](Images/Inspiration 2.jpg)
-![](Images/Inspiration 3.jpg)
+![](Images/Inspiration_1.jpg)
+![](Images/Inspiration_2.jpg)
+![](Images/Inspiration_3.jpg)
 
 ## Progress Update
 
