@@ -12,8 +12,6 @@ import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
 const controls = {
   tesselations: 5,
   'Load Scene': loadScene, // A function pointer, essentially
-  'Bikespeed': 'Medium',
-  'Lighting': 'Yes',
 };
 
 let square: Square;
@@ -49,9 +47,6 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
-  gui.add(controls, 'Bikespeed', [ 'High', 'Medium', 'Low', 'Stop' ] );
-  gui.add(controls, 'Lighting', [ 'Yes', 'No'] );
-
 
   // get canvas and webgl context
   const canvas = <HTMLCanvasElement> document.getElementById('canvas');
@@ -81,63 +76,16 @@ function main() {
     // Use this if you wish
   }
 
-  let prevBikespeed = 2.0;
-  let prevSpeed_type = 'Medium';
-  let prevLighting = 4;
-  let prevLighting_type = 'Yes';
-  let time = 0;
-
   // This function will be called every frame
   function tick() {
-
-
-    let bikespeed = prevBikespeed;
-    let lighting = prevLighting;
     camera.update();
     stats.begin();
     gl.viewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.clear();
     processKeyPresses();
-
-    if(controls.Bikespeed != prevSpeed_type)
-    {
-      prevSpeed_type = controls.Bikespeed;
-
-      switch(prevSpeed_type) {
-        case "High":
-          bikespeed = 3.0;
-          break;
-        case "Medium":
-          bikespeed = 2.0;
-          break;
-        case "Low":
-          bikespeed = 1.0;
-          break;
-        case "Stop":
-          bikespeed = 0.0;
-          break;
-      }
-      prevBikespeed = bikespeed;
-    }
-
-    if(controls.Lighting != prevLighting_type)
-    {
-      prevLighting_type = controls.Lighting;
-
-      switch(prevLighting_type) {
-        case "Yes":
-          lighting = 1;
-          break;
-        case "No":
-          lighting = 0;
-          break;
-      }
-      prevLighting = lighting;
-    }
-
     renderer.render(camera, flat, [
       square,
-    ], time, bikespeed, lighting);
+    ], time);
     time++;
     stats.end();
 

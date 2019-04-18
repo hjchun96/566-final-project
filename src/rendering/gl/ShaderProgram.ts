@@ -29,8 +29,6 @@ class ShaderProgram {
   unifUp: WebGLUniformLocation;
   unifDimensions: WebGLUniformLocation;
   unifTime: WebGLUniformLocation;
-  unifBikespeed: WebGLUniformLocation;
-  unifLighting: WebGLUniformLocation;
 
   constructor(shaders: Array<Shader>) {
     this.prog = gl.createProgram();
@@ -49,8 +47,6 @@ class ShaderProgram {
     this.unifUp   = gl.getUniformLocation(this.prog, "u_Up");
     this.unifDimensions   = gl.getUniformLocation(this.prog, "u_Dimensions");
     this.unifTime   = gl.getUniformLocation(this.prog, "u_Time");
-    this.unifBikespeed = gl.getUniformLocation(this.prog, "u_Bikespeed");
-    this.unifLighting = gl.getUniformLocation(this.prog, "u_Lighting");
   }
 
   use() {
@@ -84,20 +80,6 @@ class ShaderProgram {
     this.use();
     if(this.unifTime !== -1) {
       gl.uniform1f(this.unifTime, t);
-    }
-  }
-
-  setBikespeed(bs: number) {
-    this.use();
-    if(this.unifBikespeed !== -1) {
-      gl.uniform1f(this.unifBikespeed, bs);
-    }
-  }
-
-  setLighting(lg: number) {
-    this.use();
-    if(this.unifLighting !== -1) {
-      gl.uniform1f(this.unifLighting, lg);
     }
   }
 
