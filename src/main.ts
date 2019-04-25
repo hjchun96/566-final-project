@@ -6,6 +6,7 @@ import OpenGLRenderer from './rendering/gl/OpenGLRenderer';
 import Camera from './Camera';
 import {setGL} from './globals';
 import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
+import Texture from './rendering/gl/Texture';
 
 // Define an object with application parameters and button callbacks
 // This will be referred to by dat.GUI's functions that add GUI elements.
@@ -16,11 +17,16 @@ const controls = {
 
 let square: Square;
 let time: number = 0;
+let densityTex: Texture;
 
 function loadScene() {
   square = new Square(vec3.fromValues(0, 0, 0));
   square.create();
-  // time = 0;
+
+
+  // Vapor Emulation
+
+  // Illumination Pass (set lightsource in CPU Side)
 }
 
 function main() {

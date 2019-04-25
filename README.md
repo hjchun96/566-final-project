@@ -28,7 +28,8 @@ I wanted to work with gas/particles/realistic rendering (and debated between opt
 
 | CPU 				         |  GPU 		            	|
 |:-------------------:|:----------------------:|
-|* fafa               |  * fafa                |
+|* Vapor Emulation (FBM Generated)              |  * fafa                |
+|* Illumination Pass (set lightsource in CPU Side) | * Rendering |
 
 
 ## Reference

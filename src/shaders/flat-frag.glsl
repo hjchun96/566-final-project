@@ -5,21 +5,107 @@ uniform vec3 u_Eye, u_Ref, u_Up;
 uniform vec2 u_Dimensions;
 uniform float u_Time;
 
+uniform sampler2D u_DensityTex;
+
 in vec2 fs_Pos;
 in vec4 fs_LightVec;
 out vec4 out_Col;
 
+// ------- Globals ------- //
+vec3 sunDir = normalize( vec3(-1.0,0.0,-1.0) );
+
+// ------- Constants ------- //
 const float PI = 3.1415926535897932384626433832795;
-// int obj_hit = 0;
-// ------ Colors ------//
+
+// Colors
 vec3 BLUE = vec3(135./255.,206./255.,250./255.);
 vec3 WHITE = vec3(1.0, 1.0, 1.0);
 
-// ------- Constants ------- //
+// Ray Marching
 const int MAX_MARCHING_STEPS = 255;
 const float MIN_DIST = 0.0;
 const float MAX_DIST = 100.0;
 const float EPSILON = 0.0001;
+
+
+// Fractal Brownian Motion (referenced lecture code)
+float random1( vec2 p , vec2 seed) {
+  return fract(sin(dot(p + seed, vec2(127.1, 311.7))) * 43758.5453);
+}
+
+float random1( vec3 p , vec3 seed) {
+  return fract(sin(dot(p + seed, vec3(987.654, 123.456, 531.975))) * 85734.3545);
+}
+
+float interpNoise2D( float x, float y, vec2 seed) {
+
+	float intX = floor(x);
+	float fractX = fract(x);
+	float intY = floor(y);
+	float fractY = fract(y);
+
+	float v1 = random1(vec2(intX, intY), seed);
+	float v2 = random1(vec2(intX + 1.0, intY), seed);
+	float v3 = random1(vec2(intX, intY + 1.0), seed);
+	float v4 = random1(vec2(intX + 1.0, intY + 1.0), seed);
+
+	float i1 = mix(v1, v2, fractX);
+	float i2 = mix(v3, v4, fractY);
+	return mix(i1, i2, fractY);
+
+}
+
+mat3 m = mat3( 0.00,  0.80,  0.60,
+              -0.80,  0.36, -0.48,
+              -0.60, -0.48,  0.64 );
+float hash( float n )
+{
+    return fract(sin(n)*43758.5453);
+}
+
+float noise( in vec3 x )
+{
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+
+    f = f*f*(3.0-2.0*f);
+
+    float n = p.x + p.y*57.0 + 113.0*p.z;
+
+    float res = mix(mix(mix( hash(n+  0.0), hash(n+  1.0),f.x),
+                        mix( hash(n+ 57.0), hash(n+ 58.0),f.x),f.y),
+                    mix(mix( hash(n+113.0), hash(n+114.0),f.x),
+                        mix( hash(n+170.0), hash(n+171.0),f.x),f.y),f.z);
+    return res;
+}
+
+float fbm( vec3 p )
+{
+    float f;
+    f  = 0.5000*noise( p ); p = m*p*2.02;
+    f += 0.2500*noise( p ); p = m*p*2.03;
+    f += 0.1250*noise( p );
+    return f;
+}
+
+
+//
+// float fbm( float x, float y, vec2 seed) {
+//
+// 	float total = 0.0;
+// 	float persistance = 0.5;
+// 	float octaves = 8.0;
+//
+// 	for (float i = 0.0; i < octaves; i = i + 1.0) {
+// 		float freq = pow(2.0, i);
+// 		float amp = pow(persistance, i);
+// 		total += interpNoise2D(x * freq, y * freq, seed) * amp;
+// 	}
+// 	return total;
+// }
+
+
+/*
 
 // ------ Math Helpers -----//
 
@@ -142,48 +228,6 @@ float gain (float g, float t) {
   }
 }
 
-float random1( vec2 p , vec2 seed) {
-  return fract(sin(dot(p + seed, vec2(127.1, 311.7))) * 43758.5453);
-}
-
-float random1( vec3 p , vec3 seed) {
-  return fract(sin(dot(p + seed, vec3(987.654, 123.456, 531.975))) * 85734.3545);
-}
-
-// Fractal Brownian Motion (referenced lecture code)
-float interpNoise2D( float x, float y, vec2 seed) {
-
-	float intX = floor(x);
-	float fractX = fract(x);
-	float intY = floor(y);
-	float fractY = fract(y);
-
-	float v1 = random1(vec2(intX, intY), seed);
-	float v2 = random1(vec2(intX + 1.0, intY), seed);
-	float v3 = random1(vec2(intX, intY + 1.0), seed);
-	float v4 = random1(vec2(intX + 1.0, intY + 1.0), seed);
-
-	float i1 = mix(v1, v2, fractX);
-	float i2 = mix(v3, v4, fractY);
-	return mix(i1, i2, fractY);
-
-}
-
-
-float fbm( float x, float y, vec2 seed) {
-
-	float total = 0.0;
-	float persistance = 0.5;
-	float octaves = 8.0;
-
-	for (float i = 0.0; i < octaves; i = i + 1.0) {
-		float freq = pow(2.0, i);
-		float amp = pow(persistance, i);
-		total += interpNoise2D(x * freq, y * freq, seed) * amp;
-	}
-	return total;
-}
-
 float rand(vec2 co){return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);}
 float rand (vec2 co, float l) {return rand(vec2(rand(co), l));}
 float rand (vec2 co, float l, float t) {return rand(vec2(rand(co, l), t));}
@@ -222,7 +266,7 @@ float turbulence(float x, float y, float size)
 
   return(128.0 * value / initialSize);
 }
-
+/*
 // ------- SDF & Ray Marching Core Functions ------- //
 
 vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
@@ -369,16 +413,173 @@ float ambientOcclusion(vec3 p, vec3 n)
     return clamp(1.0 - 1.5*occ, 0.0, 1.0);
 }
 
-vec3 getObjectColor(float obj) {
-  if ( obj == 0.1) { return PINK ; }
-  else if (obj == 0.2) { return HOT_PINK;}
-  else { return YELLOW;}
+*/
+
+
+// Pseudocode from Paper Translation WIP
+// function getCandidates(vec3 ro, vec3 rd, int i) {
+//
+// 	    for j = 0< number of spheres in boundingbox[i] do
+// 	        temp = ro - sphere.center;
+//           a = dot2(rd);
+// 	        b = 2.0 * rd * temp;
+// 	        c = temp * temp * radius * radius;
+// 	        delta = b * b - 4 * a * c;
+// 	        if Δ>0 then {There is a collision}
+// 	           σ←Δ−−√
+// 	           λin = -b −σ2.0×a
+// 	           λout= -b +σ2.0×a
+// 	           candidates[k] = (λin,λout,j,i)
+// 	           k=k+1
+// 	        end if
+// 	    end for
+// 	    return (candidates,k)
+// 	end function
+// }
+
+// 	function sortCandidates(candidates, n) {//Insertion-sort algorithm
+// 	    for (int k = 1; k < n; k++) {
+// 	       aux = candidates[k];
+// 	       h=k−1;
+// 	       while ((h>=0) && (aux λin< candidates[h] λin)) {
+// 	           candidates[h + 1] = candidates[h]
+// 	           h=h−1
+// 	       }
+// 	       candidates[h + 1] = aux
+// 	    }
+// }
+
+// vec4 rayTrace(vec3 ro,vec3 rd) {
+//
+// 	    B = boundingboxDetection(ro,rd);
+// 	    tau = 1;
+// 	    R = vec4(0,0,0,0) //{Consider alpha-channel}
+// 	    for each (i in B) do
+// 	        (C,n) =getCandidates(rayOrigin,rayDirection→,i)
+// 	        candidates←sortCandidates(C,n)
+// 	        for j←0<n do
+// 	           λ = candidates[j]λin
+// 	           λout = candidates[j]λout
+// 	           while λ≤λout do// {Trace pseudo-spheroid}
+// 	               rp = ro + λ⋅rd
+// 	               dens = fbm(rayPos)
+// 	               γ←e−∥rayPos−sphereCenter→∥/(r((1−κ)+2kρ))
+// 	               if ρ<γ then
+// 	                   R += lighting(dens ,rp,rd,sunDir, voxelGrid[candidates[j]i],sunColor)
+// 	                   if τ<10−6 then
+// 	                       break for (36:)
+// 	                   end if
+// 	               end if     {Level of Detail (LOD)}
+// 	               λ+= A⋅e−(∥rayOrigin−cloudCenter→∥⋅δ)
+// 	           end while
+// 	        end for
+// 	    end foreach
+// 	    return R {Blend with the sky}
+// }
+
+
+// vec3 lighting(den, rp, rd, gridIndex, sunColor) {
+//     delta =  e−ϕρ
+//     //Calculate Voxel
+//     voxelIndex = (rp−gridMin)/(gridMax−gridMin)
+//     // Precomputed-light retrieval
+//     pL = texture(gridIndex,voxelIndex)
+//     //Absorbed-light calculation
+//     aL= sunColor * pL
+//     // Scattered-light calculation}
+//     sL= aL * phase(g, rd, sunDir) * γ;
+//     // Total-light calculation
+//     tL = aL + sL;
+//     // Calculate cloud color
+//     color = (1−Δτ)*tL*τ
+//     τ = τ*Δτ
+//     return (color,1−τ)
+// }
+
+vec4 integrate( in vec4 sum, in float dif, in float den, in vec3 bgcol, in float t )
+{
+    // lighting
+    vec3 lin = vec3(0.65,0.7,0.75)*1.4 + vec3(1.0, 0.6, 0.3)*dif;
+    vec4 col = vec4( mix( vec3(1.0,0.95,0.8), vec3(0.25,0.3,0.35), den ), den );
+    col.xyz *= lin;
+    col.xyz = mix( col.xyz, bgcol, 1.0-exp(-0.003*t*t) );
+    // front to back blending
+    col.a *= 0.4;
+    col.rgb *= col.a;
+    return sum + col*(1.0-sum.a);
+}
+
+vec4 raymarch(vec3 ro, vec3 rd, float start, float maxd) {// eye = ray orientation
+
+  vec4 sum = vec4(0.0);
+	float t = 0.0;
+  vec2 seed = vec2(1.302, 5.203);
+
+  for(int i=0; i< MAX_MARCHING_STEPS; i++) {
+    vec3  pos = ro + t*rd;
+    if( pos.y<-3.0 || pos.y>2.0 || sum.a > 0.99 ) break;
+    float den = fbm(pos);
+    if( den> 0.01 ) {
+      vec3 tmp_pos =pos+0.3*sunDir;
+      float dif =  clamp((den - fbm(tmp_pos))/0.6, 0.0, 1.0 );
+      sum = integrate( sum, dif, den, BLUE, t );
+    }
+    t += max(0.05,0.02*t);
+  }
+
+  return clamp( sum, 0.0, 1.0 );
+	// float depth = start;
+  //
+	// for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
+	// 	vec3 pnt = ro + depth * rd;
+  //   vec2 res = map(pnt);
+	// 	float dist = res.x;
+	// 	if (dist < EPSILON) {return vec2(depth, res.y);}
+	// 	depth += dist;
+	// 	if (depth >= maxd) {break;}
+	// }
+  //
+	// return vec2(maxd, 0.0);
+}
+
+vec3 render(vec3 ro, vec3 rd) {
+
+  float sun = clamp( dot(sunDir,rd), 0.0, 1.0 );
+	vec3 col = vec3(0.6,0.71,0.75) - rd.y*0.2*vec3(1.0,0.5,1.0) + 0.15*0.5;
+	col += 0.2*vec3(1.0,.6,0.1)*pow( sun, 8.0 );
+
+  // clouds
+  vec4 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
+  col = col*(1.0-res.w) + res.xyz;
+
+  // sun glare
+  col += 0.2 *vec3(1.0,0.4,0.2)*pow( sun, 3.0 );
+  return col;
+
+  // float ambiance = 0.8;
+  //
+  // if (res.x <= MAX_DIST - EPSILON) {
+  //
+  //   vec3 rp = ro + res.x * rd;
+  //   col = WHITE;
+  //   vec3 n = estimateNormal(rp);
+  //
+  //   // Lighting
+  //   vec3 light_source = vec3(10.0, 20.0, 2.0);
+  //   vec3 light_dir = normalize(light_source);
+  //   vec3 light_color = K_d;
+  //   vec3 pntToLight = vec3(light_source - rp);
+  //   float dist = length(pntToLight);
+  //   return obj_color * ambiance;
+  // }
+  //
+  //  return BLUE;
 }
 
 
 // ------- Ray March Direction Calc ------- //
-vec3 calculateRayMarchPoint() {
-
+vec3 calculateRayMarchPoint()
+{
   vec3 forward = u_Ref - u_Eye;
 	vec3 right = normalize(cross(u_Up, forward));
 	vec3 up = normalize(cross(forward, right));
@@ -398,9 +599,20 @@ vec3 calculateRayMarchPoint() {
 	return p;
 }
 
-vec3 render(vec3 ro, vec3 rd) {
+void main()
+{
+	vec3 p = calculateRayMarchPoint();
+  vec3 rd = normalize(p - u_Eye);
+  vec3 ro = u_Eye;
+  vec3 col = render(ro, rd);
+  out_Col = vec4(col, 1.0);
+}
 
-  vec2 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
+
+
+//vec3 render(vec3 ro, vec3 rd) {
+
+  /* vec2 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
   float ambiance = 0.8;
 
   if (res.x <= MAX_DIST - EPSILON) {
@@ -464,19 +676,7 @@ vec3 render(vec3 ro, vec3 rd) {
     // }
 
     return obj_color * ambiance;//(obj_color + ssd + specularReflection + ao) * ambiance;
-  }
+  }*/
 
-  return YELLOW;
-}
-
-void main() {
-
-	//***  Set up Ray Direction  ***//
-	vec3 p = calculateRayMarchPoint();
-  //*** Get color ***//
-  vec3 rd = normalize(p - u_Eye);
-  vec3 ro = u_Eye;
-  vec3 col = render(ro, rd);
-
-  out_Col = vec4(col, 1.0);
-}
+//    return BLUE;
+// }
