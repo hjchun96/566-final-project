@@ -101,10 +101,11 @@ float sdEllipsoid(vec3 p,vec3 r )
 }
 
 
-float sdPlane( vec3 p, vec4 n )
+float sdRoundBox( vec3 p, vec3 b, float r )
 {
-  // n must be normalized
-  return dot(p,n.xyz) + n.w;
+  vec3 d = abs(p) - b;
+  return length(max(d,0.0)) - r
+         + min(max(d.x,max(d.y,d.z)),0.0); // remove this line for an only partially signed sdf
 }
 
 // ------- Rotate Operations ------- //
@@ -267,6 +268,7 @@ float noiseTexture (vec3 coord) {
 
 // ------- SDF & Ray Marching Core Functions ------- //
 float opU( float d1, float d2 ) { return min(d1,d2); }
+float opS( float d1, float d2 ) { return max(-d1,d2); }
 
 vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
 	vec3 new_pnt = rotation * pnt;
@@ -278,27 +280,31 @@ float mapCloud(vec3 pnt) {
 
   float c = fbm(pnt);//noiseTexture(pnt);
   vec4 offset = vec4(c, c, c, c);
-  float cloud1 = sdEllipsoid(pnt + offset.xyz * 3.0, vec3(10, 10, 10));//+ vec3(0.2, 0.33, 1.1)
-  // float cloud2 = sdEllipsoid(pnt + vec3(0.0, 5.0, 5.0) + offset.xyz * 3.0, vec3(10, 10, 5));//+ vec3(0.2, 0.33, 1.1)
-  // float cloud3 = sdEllipsoid(pnt + vec3(0.0, -5.0, 5.0) + offset.xyz * 3.0, vec3(10, 10, 5));//+ vec3(0.2, 0.33, 1.1)
+  float cloud1 = sdEllipsoid(pnt + offset.xyz * 3.0, vec3(7,7, 7));//+ vec3(0.2, 0.33, 1.1)
+  float cloud2 = sdEllipsoid(pnt + vec3(4.0, 0.0, 0.0) + offset.xyz * 3.0, vec3(7,3, 7));//+ vec3(0.2, 0.33, 1.1)
+  float cloud3 = sdEllipsoid(pnt - vec3(4.0, 0.0, 0.0) + offset.xyz * 3.0, vec3(7,3, 7));//+ vec3(0.2, 0.33, 1.1)
   // float cloud4 = sdEllipsoid(pnt + vec3(0.0, 5.0, -5.0)+ offset.xyz * 3.0, vec3(10, 10, 5));//+ vec3(0.2, 0.33, 1.1)
 
   float res = cloud1;
-  // res = opU(res, cloud2);
-  // res = opU(res, cloud3);
+  res = opU(res, cloud2);
+  res = opU(res, cloud3);
   // res = opU(res, cloud4);
+
+  float cloud_base = sdRoundBox(pnt - vec3(0.,4.2,0.)+ offset.xyz, vec3(7.0, 1.2, 7.0), 1.0);
+
+  res = opS(cloud_base, res);
   return res;
 }
 
 float map(vec3 og_pnt) {
 
-	vec3 pnt = preProcessPnt(og_pnt, rotateX(1.57));
+	// vec3 pnt = preProcessPnt(og_pnt, rotateX(1.57));
 
   // **** Define Components and Position **** //
   // lr, , depth, height
 
   // Candy
-  vec3 cloud_c = pnt - vec3(0.0, -1.3, 2.0);
+  vec3 cloud_c = og_pnt - vec3(0.0, -1.3, 2.0);
   float cloud = mapCloud(cloud_c);
 
   float res = cloud;
