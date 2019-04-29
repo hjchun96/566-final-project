@@ -6,7 +6,7 @@ import OpenGLRenderer from './rendering/gl/OpenGLRenderer';
 import Camera from './Camera';
 import {setGL} from './globals';
 import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
-import Texture from './rendering/gl/Texture';
+// import Texture from './rendering/gl/Texture';
 
 // Define an object with application parameters and button callbacks
 // This will be referred to by dat.GUI's functions that add GUI elements.
@@ -17,12 +17,16 @@ const controls = {
 
 let square: Square;
 let time: number = 0;
-let densityTex: Texture;
+// let noiseTex1: Texture;
+// let noiseTex2: Texture;
 
 function loadScene() {
   square = new Square(vec3.fromValues(0, 0, 0));
   square.create();
 
+  // noiseTex1 = new Texture('../resources/fbmRep1.png', 0)
+  // noiseTex2 = new Texture('../resources/fbmRep2.png', 0)
+  //
 
   // Vapor Emulation
 
@@ -81,6 +85,9 @@ function main() {
   function processKeyPresses() {
     // Use this if you wish
   }
+
+  // flat.bindTexToUnit(flat.unifSampler1, noiseTex1, 0);
+  // flat.bindTexToUnit(flat.unifSampler2, noiseTex2, 1);
 
   // This function will be called every frame
   function tick() {

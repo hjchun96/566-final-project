@@ -4,8 +4,7 @@ precision highp float;
 uniform vec3 u_Eye, u_Ref, u_Up;
 uniform vec2 u_Dimensions;
 uniform float u_Time;
-
-uniform sampler2D u_DensityTex;
+// uniform sampler2D u_NoiseTex1, u_NoiseTex2;
 
 in vec2 fs_Pos;
 in vec4 fs_LightVec;
@@ -15,7 +14,8 @@ out vec4 out_Col;
 vec3 sunDir = normalize( vec3(-1.0,0.0,-1.0) );
 
 // ------- Constants ------- //
-const float PI = 3.1415926535897932384626433832795;
+#define PI = 3.1415926535897932384626433832795;
+
 
 // Colors
 vec3 BLUE = vec3(135./255.,206./255.,250./255.);
@@ -72,6 +72,8 @@ float noise( in vec3 x )
 
     float n = p.x + p.y*57.0 + 113.0*p.z;
 
+    // texture(u_NoiseTex1, uv - vec2(0.0, u_Time * 0.01)).r - 1.0;
+
     float res = mix(mix(mix( hash(n+  0.0), hash(n+  1.0),f.x),
                         mix( hash(n+ 57.0), hash(n+ 58.0),f.x),f.y),
                     mix(mix( hash(n+113.0), hash(n+114.0),f.x),
@@ -89,38 +91,8 @@ float fbm( vec3 p )
 }
 
 
-//
-// float fbm( float x, float y, vec2 seed) {
-//
-// 	float total = 0.0;
-// 	float persistance = 0.5;
-// 	float octaves = 8.0;
-//
-// 	for (float i = 0.0; i < octaves; i = i + 1.0) {
-// 		float freq = pow(2.0, i);
-// 		float amp = pow(persistance, i);
-// 		total += interpNoise2D(x * freq, y * freq, seed) * amp;
-// 	}
-// 	return total;
-// }
-
-
-/*
-
-// ------ Math Helpers -----//
-
-float dist (vec2 p1, vec2 p2) {
-  float diffX = p1.x - p2.x;
-  float diffY = p1.y - p2.y;
-  return sqrt(diffX*diffX + diffY*diffY);
-}
-
-
-float dot2( in vec3 v ) { return dot(v,v); }
 
 // ------- Primatives ------- //
-// All taken from IQ: http://www.iquilezles.org/www/articles/distfunctions/distfunctions.htm
-
 float sdEllipsoid(vec3 p,vec3 r )
 {
   float k0 = length(p/r);
@@ -128,10 +100,6 @@ float sdEllipsoid(vec3 p,vec3 r )
   return k0*(k0-1.0)/k1;
 }
 
-float sdSphere( vec3 p, float s )
-{
-  return length(p)-s;
-}
 
 float sdPlane( vec3 p, vec4 n )
 {
@@ -170,104 +138,135 @@ mat3 rotateZ(float theta) {
     );
 }
 
-// ------- Operations ------- //
-// All taken from IQ, constants modified appropriately
 
-float opU( float d1, float d2 ) { return min(d1,d2); }
-
-float opI( float d1, float d2 ) { return max(d1,d2); }
-
-float opSmoothUnion( float d1, float d2, float k ) {
-  float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
-  return mix( d2, d1, h ) - k*h*(1.0-h);
-}
-
-float opSmoothSubtraction( float d1, float d2, float k ) {
-    float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
-    return mix( d2, -d1, h ) + k*h*(1.0-h);
-}
-
-
-float opDisplace(vec3 p)
+float rand(vec3 co)
 {
-  float total = floor(p.x*float(u_Dimensions.x)) +
-        floor(p.y*float(u_Dimensions.y));
-  bool isEven = mod(total, 2.0)==0.0;
-  return (isEven)? 0.4:0.1;
+	return fract(sin(dot(co.xyz, vec3(12.9898, 78.233, 56.787))) * 43758.5453);
 }
 
-// ------- Toolbox Functions ------- //
-float impulse( float k, float x )
-{
-    float h = k*x;
-    return h*exp(1.0-h);
+// Noise functions
+//
+// Hash without Sine by DaveHoskins
+//
+// https://www.shadertoy.com/view/4djSRW
+//
+float hash12( vec2 p ) {
+    p  = 50.0*fract( p*0.3183099 );
+    return fract( p.x*p.y*(p.x+p.y) );
 }
 
-
-float cubicPulse( float c, float w, float x )
-{
-    x = abs(x - c);
-    if( x > w ) return 0.0;
-    x /= w;
-    return 1.0 - x*x*(3.0-2.0*x);
+float hash13(vec3 p3) {
+    p3  = fract(p3 * 1031.1031);
+    p3 += dot(p3, p3.yzx + 19.19);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
-float square_wave(float x, float freq, float amplitude) {
-	return abs(mod(floor(x * freq), 2.0)* amplitude);
+vec3 hash33(vec3 p3) {
+	p3 = fract(p3 * vec3(.1031, .1030, .0973));
+    p3 += dot(p3, p3.yxz+19.19);
+    return fract((p3.xxy + p3.yxx)*p3.zyx);
 }
 
-float bias (float b, float t) {
-  return pow(t, log(b)/log(0.5));
+float valueHash(vec3 p3) {
+    p3  = fract(p3 * 0.1031);
+    p3 += dot(p3, p3.yzx + 19.19);
+    return fract((p3.x + p3.y) * p3.z);
 }
 
-float gain (float g, float t) {
-  if (t < 0.5) {
-    return bias(1.-g, 2.*t)/2.;
-  } else {
-    return 1. - bias(1.- g, 2. - 2.*t)/2.;
-  }
+//
+// Noise functions used for cloud shapes
+//
+float valueNoise( in vec3 x, float tile ) {
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+    f = f*f*(3.0-2.0*f);
+
+    return mix(mix(mix( valueHash(mod(p+vec3(0,0,0),tile)),
+                        valueHash(mod(p+vec3(1,0,0),tile)),f.x),
+                   mix( valueHash(mod(p+vec3(0,1,0),tile)),
+                        valueHash(mod(p+vec3(1,1,0),tile)),f.x),f.y),
+               mix(mix( valueHash(mod(p+vec3(0,0,1),tile)),
+                        valueHash(mod(p+vec3(1,0,1),tile)),f.x),
+                   mix( valueHash(mod(p+vec3(0,1,1),tile)),
+                        valueHash(mod(p+vec3(1,1,1),tile)),f.x),f.y),f.z);
 }
 
-float rand(vec2 co){return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);}
-float rand (vec2 co, float l) {return rand(vec2(rand(co), l));}
-float rand (vec2 co, float l, float t) {return rand(vec2(rand(co, l), t));}
+float voronoi( vec3 x, float tile ) {
+    vec3 p = floor(x);
+    vec3 f = fract(x);
 
-float perlin(vec2 p, float dim, float time) {
-	vec2 pos = floor(p * dim);
-	vec2 posx = pos + vec2(1.0, 0.0);
-	vec2 posy = pos + vec2(0.0, 1.0);
-	vec2 posxy = pos + vec2(1.0);
+    float res = 100.;
+    for(int k=-1; k<=1; k++){
+        for(int j=-1; j<=1; j++) {
+            for(int i=-1; i<=1; i++) {
+                vec3 b = vec3(i, j, k);
+                vec3 c = p + b;
 
-	float c = rand(pos, dim, time);
-	float cx = rand(posx, dim, time);
-	float cy = rand(posy, dim, time);
-	float cxy = rand(posxy, dim, time);
+                if( tile > 0. ) {
+                    c = mod( c, vec3(tile) );
+                }
 
-	vec2 d = fract(p * dim);
-	d = -0.5 * cos(d * 3.141592) + 0.5;
+                vec3 r = vec3(b) - f + hash13( c );
+                float d = dot(r, r);
 
-	float ccx = mix(c, cx, d.x);
-	float cycxy = mix(cy, cxy, d.x);
-	float center = mix(ccx, cycxy, d.y);
+                if(d < res) {
+                    res = d;
+                }
+            }
+        }
+    }
 
-	return center * 2.0 - 1.0;
+    return 1.-res;
 }
 
-float turbulence(float x, float y, float size)
-{
-  float value = 0.0;
-  float initialSize = size;
+float tilableVoronoi( vec3 p, const int octaves, float tile ) {
+    float f = 1.;
+    float a = 1.;
+    float c = 0.;
+    float w = 0.;
 
-  while(size >= 1.)
-  {
-    value += smoothstep(x/size, y / size, size);
-    size /= 2.0;
-  }
+    if( tile > 0. ) f = tile;
 
-  return(128.0 * value / initialSize);
+    for( int i=0; i<octaves; i++ ) {
+        c += a*voronoi( p * f, f );
+        f *= 2.0;
+        w += a;
+        a *= 0.5;
+    }
+
+    return c / w;
 }
-/*
+
+float tilableFbm( vec3 p, const int octaves, float tile ) {
+    float f = 1.;
+    float a = 1.;
+    float c = 0.;
+    float w = 0.;
+
+    if( tile > 0. ) f = tile;
+
+    for( int i=0; i<octaves; i++ ) {
+        c += a*valueNoise( p * f, f );
+        f *= 2.0;
+        w += a;
+        a *= 0.5;
+    }
+
+    return c / w;
+}
+
+float noiseTexture (vec3 coord) {
+
+     float r = tilableFbm( coord, 16,  3. );
+     float g = tilableFbm( coord,  4,  8. );
+     float b = tilableFbm( coord,  4, 16. );
+
+     float c = max(0., 1.-(r + g * .5 + b * .25) / 1.75);
+     return c;
+}
+
 // ------- SDF & Ray Marching Core Functions ------- //
+float opU( float d1, float d2 ) { return min(d1,d2); }
 
 vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
 	vec3 new_pnt = rotation * pnt;
@@ -277,11 +276,21 @@ vec3 preProcessPnt(vec3 pnt, mat3 rotation) {
 
 float mapCloud(vec3 pnt) {
 
-  float tube = sdTorus(pnt * rotateX(1.57), vec2(0.7, 0.2));
-  return tube;
+  float c = fbm(pnt);//noiseTexture(pnt);
+  vec4 offset = vec4(c, c, c, c);
+  float cloud1 = sdEllipsoid(pnt + offset.xyz * 3.0, vec3(10, 10, 10));//+ vec3(0.2, 0.33, 1.1)
+  // float cloud2 = sdEllipsoid(pnt + vec3(0.0, 5.0, 5.0) + offset.xyz * 3.0, vec3(10, 10, 5));//+ vec3(0.2, 0.33, 1.1)
+  // float cloud3 = sdEllipsoid(pnt + vec3(0.0, -5.0, 5.0) + offset.xyz * 3.0, vec3(10, 10, 5));//+ vec3(0.2, 0.33, 1.1)
+  // float cloud4 = sdEllipsoid(pnt + vec3(0.0, 5.0, -5.0)+ offset.xyz * 3.0, vec3(10, 10, 5));//+ vec3(0.2, 0.33, 1.1)
+
+  float res = cloud1;
+  // res = opU(res, cloud2);
+  // res = opU(res, cloud3);
+  // res = opU(res, cloud4);
+  return res;
 }
 
-vec2 map(vec3 og_pnt) {
+float map(vec3 og_pnt) {
 
 	vec3 pnt = preProcessPnt(og_pnt, rotateX(1.57));
 
@@ -289,212 +298,20 @@ vec2 map(vec3 og_pnt) {
   // lr, , depth, height
 
   // Candy
-  vec3 cloud_c = pnt -vec3(0.0, -1.3, 2.0);
-  float cloud = mapCloud(candy_c);
-  vec2 res = vec2(cloud, 0.1);
+  vec3 cloud_c = pnt - vec3(0.0, -1.3, 2.0);
+  float cloud = mapCloud(cloud_c);
 
-  float pupil1 = sdEllipsoid(bear_c+ vec3(0.2, 0.33, 1.1), vec3(0.05, 0.06, 0.08));
-  float pupil2 = sdEllipsoid(bear_c+ vec3(-0.2, 0.33, 1.1), vec3(0.05, 0.06, 0.08));
-  float pupils = opU(pupil1, pupil2);
-  if (pupils < res.x){ res = vec2(pupils, 0.9);}
-
-  // Plane (floor)
-  float plane = sdPlane(pnt - vec3(0.0, 0.0, 2.0), vec4(0.0, 0.0, -1.0, 1.0));
-  if (plane < res.x){ res = vec2(plane, 1.0);}
+  float res = cloud;
 
   return res;
 }
 
-vec2 raymarch(vec3 ro, vec3 rd, float start, float maxd) {// eye = ray orientation
-
-	float depth = start;
-
-	for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
-		vec3 pnt = ro + depth * rd;
-    vec2 res = map(pnt);
-		float dist = res.x;
-		if (dist < EPSILON) {return vec2(depth, res.y);}
-		depth += dist;
-		if (depth >= maxd) {break;}
-	}
-
-	return vec2(maxd, 0.0);
+// *** Lighting ***/
+// Henyey-Greenstein
+float Phase(in float g, in float theta) {
+    float invPi = 0.31830988618;
+    return 0.25 * invPi * (1.0 - g * g) / (1.0 + g * g - 2.0 * g * pow(theta, 1.5));
 }
-
-// ------- Normal ------- //
-vec3 estimateNormal(vec3 p) {
-    return normalize(vec3(
-        map(vec3(p.x + EPSILON, p.y, p.z)).x - map(vec3(p.x - EPSILON, p.y, p.z)).x,
-        map(vec3(p.x, p.y + EPSILON, p.z)).x - map(vec3(p.x, p.y - EPSILON, p.z)).x,
-        map(vec3(p.x, p.y, p.z  + EPSILON)).x - map(vec3(p.x, p.y, p.z - EPSILON)).x
-    ));
-}
-
-float softshadow(vec3 ro,vec3 rd, float mint, float maxt, float k )
-{
-    float res = 1.0;
-    float ph = 1e20;
-    for( float t=mint; t < maxt; )
-    {
-        float h = map(ro + rd*t).x;
-        if( h< 0.001 )
-            return 0.0;
-        float y = h*h/(2.0*ph);
-        float d = sqrt(h*h-y*y);
-        res = min( res, k*d/max(0.0,t-y) );
-        ph = h;
-        t += h;
-    }
-    return res;
-}
-
-vec3 phongContribForLight(vec3 k_d, vec3 k_s, float alpha, vec3 p, vec3 eye,
-                          vec3 lightPos, vec3 lightIntensity) {
-    vec3 N = estimateNormal(p);
-    vec3 L = normalize(lightPos - p);
-    vec3 V = normalize(eye - p);
-    vec3 R = normalize(reflect(-L, N));
-
-    float dotLN = dot(L, N);
-    float dotRV = dot(R, V);
-
-    if (dotLN < 0.0) {
-        // Light not visible from this point on the surface
-        return vec3(0.0, 0.0, 0.0);
-    }
-
-    if (dotRV < 0.0) {
-        // Light reflection in opposite direction as viewer, apply only diffuse
-        // component
-        return lightIntensity * (k_d * dotLN);
-    }
-    return lightIntensity * (k_d * dotLN + k_s * pow(dotRV, alpha));
-}
-
-vec3 phongIllumination(vec3 k_a, vec3 k_d, vec3 k_s, float alpha, vec3 p, vec3 eye) {
-    const vec3 ambientLight = 0.6 * vec3(1.0, 1.0, 1.0);
-    vec3 color = ambientLight * k_a;
-
-    vec3 light1Pos = vec3(10.0, 20.0, 2.0);
-    vec3 light1Intensity = vec3(0.1, 0.1, 0.1);
-
-    color += phongContribForLight(k_d, k_s, alpha, p, eye,
-                                  light1Pos,
-                                  light1Intensity);
-
-    vec3 light2Pos = vec3(7.0,
-                          20.0,
-                          20.0);
-    vec3 light2Intensity = vec3(0.1, 0.1, 0.1);
-
-    color += phongContribForLight(k_d, k_s, alpha, p, eye,
-                                  light2Pos,
-                                  light2Intensity);
-
-    return color;
-}
-
-
-// From simon green and others
-float ambientOcclusion(vec3 p, vec3 n)
-{
-    int num_steps = 5;
-    float delta = 3.0;
-
-    float occ= 0.0;
-    float w = 2.0;
-
-    for(int i=1; i <= num_steps; i++) {
-        float d = (float(i) / float(num_steps)) * delta;
-        vec2 res = map(p + n*d);
-        occ += w*(d - res.x);
-        w *= 0.6;
-    }
-    return clamp(1.0 - 1.5*occ, 0.0, 1.0);
-}
-
-*/
-
-
-// Pseudocode from Paper Translation WIP
-// function getCandidates(vec3 ro, vec3 rd, int i) {
-//
-// 	    for j = 0< number of spheres in boundingbox[i] do
-// 	        temp = ro - sphere.center;
-//           a = dot2(rd);
-// 	        b = 2.0 * rd * temp;
-// 	        c = temp * temp * radius * radius;
-// 	        delta = b * b - 4 * a * c;
-// 	        if Δ>0 then {There is a collision}
-// 	           σ←Δ−−√
-// 	           λin = -b −σ2.0×a
-// 	           λout= -b +σ2.0×a
-// 	           candidates[k] = (λin,λout,j,i)
-// 	           k=k+1
-// 	        end if
-// 	    end for
-// 	    return (candidates,k)
-// 	end function
-// }
-
-// 	function sortCandidates(candidates, n) {//Insertion-sort algorithm
-// 	    for (int k = 1; k < n; k++) {
-// 	       aux = candidates[k];
-// 	       h=k−1;
-// 	       while ((h>=0) && (aux λin< candidates[h] λin)) {
-// 	           candidates[h + 1] = candidates[h]
-// 	           h=h−1
-// 	       }
-// 	       candidates[h + 1] = aux
-// 	    }
-// }
-
-// vec4 rayTrace(vec3 ro,vec3 rd) {
-//
-// 	    B = boundingboxDetection(ro,rd);
-// 	    tau = 1;
-// 	    R = vec4(0,0,0,0) //{Consider alpha-channel}
-// 	    for each (i in B) do
-// 	        (C,n) =getCandidates(rayOrigin,rayDirection→,i)
-// 	        candidates←sortCandidates(C,n)
-// 	        for j←0<n do
-// 	           λ = candidates[j]λin
-// 	           λout = candidates[j]λout
-// 	           while λ≤λout do// {Trace pseudo-spheroid}
-// 	               rp = ro + λ⋅rd
-// 	               dens = fbm(rayPos)
-// 	               γ←e−∥rayPos−sphereCenter→∥/(r((1−κ)+2kρ))
-// 	               if ρ<γ then
-// 	                   R += lighting(dens ,rp,rd,sunDir, voxelGrid[candidates[j]i],sunColor)
-// 	                   if τ<10−6 then
-// 	                       break for (36:)
-// 	                   end if
-// 	               end if     {Level of Detail (LOD)}
-// 	               λ+= A⋅e−(∥rayOrigin−cloudCenter→∥⋅δ)
-// 	           end while
-// 	        end for
-// 	    end foreach
-// 	    return R {Blend with the sky}
-// }
-
-
-// vec3 lighting(den, rp, rd, gridIndex, sunColor) {
-//     delta =  e−ϕρ
-//     //Calculate Voxel
-//     voxelIndex = (rp−gridMin)/(gridMax−gridMin)
-//     // Precomputed-light retrieval
-//     pL = texture(gridIndex,voxelIndex)
-//     //Absorbed-light calculation
-//     aL= sunColor * pL
-//     // Scattered-light calculation}
-//     sL= aL * phase(g, rd, sunDir) * γ;
-//     // Total-light calculation
-//     tL = aL + sL;
-//     // Calculate cloud color
-//     color = (1−Δτ)*tL*τ
-//     τ = τ*Δτ
-//     return (color,1−τ)
-// }
 
 vec4 integrate( in vec4 sum, in float dif, in float den, in vec3 bgcol, in float t )
 {
@@ -503,83 +320,173 @@ vec4 integrate( in vec4 sum, in float dif, in float den, in vec3 bgcol, in float
     vec4 col = vec4( mix( vec3(1.0,0.95,0.8), vec3(0.25,0.3,0.35), den ), den );
     col.xyz *= lin;
     col.xyz = mix( col.xyz, bgcol, 1.0-exp(-0.003*t*t) );
+
     // front to back blending
     col.a *= 0.4;
     col.rgb *= col.a;
     return sum + col*(1.0-sum.a);
 }
 
-vec4 raymarch(vec3 ro, vec3 rd, float start, float maxd) {// eye = ray orientation
-
+vec4 raymarch(vec3 ro, vec3 rd, float start, float maxd, out float res) {
+  float t = start;
   vec4 sum = vec4(0.0);
-	float t = 0.0;
-  vec2 seed = vec2(1.302, 5.203);
 
-  for(int i=0; i< MAX_MARCHING_STEPS; i++) {
-    vec3  pos = ro + t*rd;
-    if( pos.y<-3.0 || pos.y>2.0 || sum.a > 0.99 ) break;
-    float den = fbm(pos);
-    if( den> 0.01 ) {
-      vec3 tmp_pos =pos+0.3*sunDir;
-      float dif =  clamp((den - fbm(tmp_pos))/0.6, 0.0, 1.0 );
-      sum = integrate( sum, dif, den, BLUE, t );
+  for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
+    if (t >= maxd || sum.a > 0.99) {break;}
+    vec3 pos = ro + t * rd;
+
+    float density = fbm(pos);//noiseTexture(pos);
+    if (density > 0.01) {
+      // float ext = exp(-scatteringCoeff * density * dt);
+      // transmittance *= ext;
+      float res = map(pos);
+      if (res < EPSILON) {
+        // lighting here
+        float dif =  clamp((density - fbm(pos))/0.6, 0.0, 1.0 );
+        sum = integrate( sum, dif, density, BLUE, t );
+      }
     }
-    t += max(0.05,0.02*t);
+    t += max(0.05, 0.02 * t);
   }
+  return sum;
 
-  return clamp( sum, 0.0, 1.0 );
-	// float depth = start;
+  // for(int i=0; i< MAX_MARCHING_STEPS; i++) {
+  //   vec3  pos = ro + t*rd;
+  //   if( pos.y<-3.0 || pos.y>2.0 || sum.a > 0.99 ) break;
+  //   float den = fbm(pos);
+  //
+  //   if( den> 0.01 ) {
+  //     vec3 tmp_pos = pos + 0.3 * sunDir;
+  //     float dif =  clamp((den - fbm(tmp_pos))/0.6, 0.0, 1.0 );
+  //     sum = integrate( sum, dif, den, BLUE, t );
+  //   }
+  //   t += max(0.05,0.02*t);
+  // }
+
+  // return clamp( sum, 0.0, 1.0 );
+  // float t = start; // aka. depth
+  // float transmittance = 1.0;
+  // float dt;
+  // vec3 pos;
+  // vec4 color = vec4(0.0);
+  // float scatteringCoeff = 0.5;
+  //
+  // pos = ro + t * rd;
+  // float density = noiseTexture(pos);
   //
 	// for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
-	// 	vec3 pnt = ro + depth * rd;
-  //   vec2 res = map(pnt);
-	// 	float dist = res.x;
-	// 	if (dist < EPSILON) {return vec2(depth, res.y);}
-	// 	depth += dist;
-	// 	if (depth >= maxd) {break;}
-	// }
   //
-	// return vec2(maxd, 0.0);
+  //   if(color.a > 0.99 ) break;
+  //   float accumDensity = 0.0;
+  //
+  //   res = map(pos);
+  //
+	// 	if (res < EPSILON) {
+  //
+  //     // transmittance *= exp(-scatteringCoeff * density * dt);
+  //     // color.xyz = BLUE;
+  //     color.xyz = WHITE;
+  //     color.a = density;//transmittance;
+  //
+  //     // Compute samples toward light source
+  //     // float stepSize = 0.1;
+  //     // vec3 light = vec3(0.6, 0.55, 0.4) * 50.0;
+  //     //
+  //     // float accumDensity = 0.0;
+  //     // accumDensity += noiseTexture(pos + dt * sunDir) * dt;
+  //     // vec3 incidentLight = light * exp(-scatteringCoeff * accumDensity * dt);
+  //     // color.xyz += scatteringCoeff * density * Phase(scatteringCoeff, abs(dot(rd, sunDir))) * incidentLight * transmittance * dt;
+  //
+  //     //**  beginning of lighting function **//
+  //     // color += lighting(accumDensity, );
+  //
+  //     // float scatteringCoeff = 0.5;
+  //     // vec4 light;
+  //     // // Sun
+  //     // // Background
+  //     //
+  //     // incidentLight = light * exp(-scatteringCoeff * accumDensity * stepSize);
+  //     //
+  //     // //Absorbed-light calculation
+  //     // light += sunColor * pL;
+  //     //
+  //     // // Scattered-light calculation
+  //     // light += scatteringCoeff * density * Phase(scatteringCoeff, abs(dot(rd, sunDir))) * incidentLight * transmittance * dt;
+  //     //
+  //     // // Front to back blending
+  //     // col.a *= 0.4;
+  //     // col.rgb *= col.a;
+  //     //
+  //     // // Calculate Cloud Color
+  //     // return sum + col*(1.0-sum.a);
+  //
+  //     // **  end of lighting function **//
+  //
+  //     //if (transmittance <= 0.01) break;
+  //   }
+  //   dt = max(0.05, 0.02 * t);
+  //   t += dt;
+	// 	if (t >= maxd) {break;}
+	// }
+	// return color;
+
 }
 
-vec3 render(vec3 ro, vec3 rd) {
 
-  float sun = clamp( dot(sunDir,rd), 0.0, 1.0 );
-	vec3 col = vec3(0.6,0.71,0.75) - rd.y*0.2*vec3(1.0,0.5,1.0) + 0.15*0.5;
-	col += 0.2*vec3(1.0,.6,0.1)*pow( sun, 8.0 );
+vec3 ShadeBackground( vec3 rd )
+{
+    vec3 color = vec3(0.0);
+    //vec3 sunDir = normalize(vec3(cos(iTime), 2.0, sin(iTime)));
+    // Sun
+    float sunDot = clamp(dot(sunDir, rd), 0.0, 1.0);
+    vec3 sunColor = vec3(1.0, 0.58, 0.3) * 20.0;
+    color += sunColor * pow(sunDot, 17.0);
 
-  // clouds
-  vec4 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
-  col = col*(1.0-res.w) + res.xyz;
+    // Sky
+    vec3 skyColor = vec3(0.22, 0.44, 0.58) * 0.65;
+    color += skyColor;
 
-  // sun glare
-  col += 0.2 *vec3(1.0,0.4,0.2)*pow( sun, 3.0 );
-  return col;
+    return color;
+}
+
+vec4 render(vec3 ro, vec3 rd) {
+  vec4 col = vec4(1.0);
+  // float sun = clamp( dot(sunDir,rd), 0.0, 1.0 );
+  // col.xyz = vec3(0.6,0.71,0.75) - rd.y*0.2*vec3(1.0,0.5,1.0) + 0.15*0.5;
+  // col.xyz += 0.2*vec3(1.0,.6,0.1) * pow( sun, 8.0 );
+  // //clouds
+  // vec4 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
+  // col = col*(1.0-res.w) + res.xyz;
+
+  float res;
+  vec4 r_col = raymarch(ro, rd, MIN_DIST, MAX_DIST, res);
 
   // float ambiance = 0.8;
-  //
-  // if (res.x <= MAX_DIST - EPSILON) {
-  //
-  //   vec3 rp = ro + res.x * rd;
-  //   col = WHITE;
-  //   vec3 n = estimateNormal(rp);
-  //
-  //   // Lighting
-  //   vec3 light_source = vec3(10.0, 20.0, 2.0);
-  //   vec3 light_dir = normalize(light_source);
-  //   vec3 light_color = K_d;
-  //   vec3 pntToLight = vec3(light_source - rp);
-  //   float dist = length(pntToLight);
-  //   return obj_color * ambiance;
-  // }
-  //
-  //  return BLUE;
+
+  if (res <= MAX_DIST - EPSILON) {
+    col.xyz =r_col.xyz;
+    col.a = r_col.a;
+    return col;
+
+    // vec3 rp = ro + res * rd;
+
+    // col = WHITE.xyz;
+    // vec3 n = estimateNormal(rp);
+
+  } //else {
+  col.xyz = BLUE;
+  return col;
+  //}
+
+  //sun glare
+  // col.xyz += 0.2 * vec3(1.0,0.4,0.2) * pow( sun, 3.0 );
+  // return col;
+
 }
 
 
 // ------- Ray March Direction Calc ------- //
-vec3 calculateRayMarchPoint()
-{
+vec3 calculateRayMarchPoint() {
   vec3 forward = u_Ref - u_Eye;
 	vec3 right = normalize(cross(u_Up, forward));
 	vec3 up = normalize(cross(forward, right));
@@ -599,84 +506,9 @@ vec3 calculateRayMarchPoint()
 	return p;
 }
 
-void main()
-{
+void main() {
 	vec3 p = calculateRayMarchPoint();
   vec3 rd = normalize(p - u_Eye);
   vec3 ro = u_Eye;
-  vec3 col = render(ro, rd);
-  out_Col = vec4(col, 1.0);
+  out_Col = render(ro, rd);
 }
-
-
-
-//vec3 render(vec3 ro, vec3 rd) {
-
-  /* vec2 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
-  float ambiance = 0.8;
-
-  if (res.x <= MAX_DIST - EPSILON) {
-
-    vec3 rp = ro + res.x * rd;
-    vec3 col = getObjectColor(res.y);
-    // if (res.y == 0.1) {
-    //   vec3 P2 = vec3(255./255., 178./255., 195./255.);
-    //   float noise =(perlin(rp.yz, 30.0,10.0));
-    //   col = col *noise  +  P2 * (1. - noise);
-    // } else if (res.y == 0.6) {
-    //   vec3 P2 = vec3(255./255., 178./255., 195./255.);
-    //   float noise =(perlin(rp.yz, 3.0,1.0));
-    //   col = col *noise  +  P2 * (1. - noise);
-    // }
-     //+ mix(0.f, square_wave(0.2, 0.2, 4.0),(rp.z)/50.f);
-    vec3 n = estimateNormal(rp);
-    // if (res.y == 0.1) {
-    //   float noise =(perlin(rp.yz, 20.0,1.0));
-    //   n =n*(1.-noise) ;
-    // }
-
-    // if (res.y == 1.0) {
-    //   float radius = 13.0;
-    //   float softness = 1.0;
-    //   vec3 position = rp;
-    //   position.z -= 4.5;
-    //   float len = length(position);
-    //   float vignette = smoothstep(radius, radius-softness, len);
-    //   col = mix(col.rgb, col.rgb * vignette, 0.5);
-    // }
-
-    // Apply Phong Illumination
-    vec3 p = calculateRayMarchPoint();
-    vec3 rd = normalize(p - u_Eye);
-    vec3 K_a = col;
-    vec3 K_d = PINK;
-    vec3 K_s = vec3(0.2, 0.2, 0.2);
-
-    vec3 obj_color = phongIllumination(K_a, K_d, K_s, shininess, rp, ro);
-
-    // // Lighting
-
-    vec3 light_source = vec3(10.0, 20.0, 2.0);
-    vec3 light_dir = normalize(light_source);
-    vec3 light_color = K_d;
-    // float light = dot(light_dir, n); // Lambertian Reflective Lighting
-    vec3 pntToLight = vec3(light_source - rp);
-    float dist = length(pntToLight);
-    // float attenuation = 1.0 / dist;
-
-    // vec3 spec_color = YELLOW;
-    // float ssd = softshadow(rp,light_dir, 0.0, 20.0, 2.0);
-    // float ao = ambientOcclusion(rp, light_dir);
-    // vec3 specularReflection = vec3(0.0, 0.0, 0.0);
-    // if (dot(n, light_dir) > 0.0)
-    // {
-    //   vec3 halfway = normalize(light_dir + rd);
-    //   float w = pow(1.0 - max(0.0, dot(halfway, rd)), 5.0);
-    //   specularReflection = attenuation * light_color * mix(spec_color, vec3(1.0), w)  * pow(max(0.0, dot(reflect(-light_dir, n), rd)),shininess);
-    // }
-
-    return obj_color * ambiance;//(obj_color + ssd + specularReflection + ao) * ambiance;
-  }*/
-
-//    return BLUE;
-// }
