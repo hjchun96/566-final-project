@@ -1,21 +1,19 @@
-# Final Project: Volumetric Clouds/Fire
-## Results
+# Final Project: Volumetric Clouds
 Live demo can be found here: https://hjchun96.github.io/566-final-project/
 
-
 ## Overview & Inspiration
-The goal of the project is to create an environmental setpiece involving realistic and aesthetic clouds for which
-I hope to provide a gui so that the user can navigate around the setpiece and fly through the clouds.
+The goal of the project is to create an environmental setpiece involving realistic and aesthetic clouds for which I hope to provide a gui so that the user can navigate around the setpiece and fly through the clouds.
+
 
 ![](Images/Types.png)
 
-There are multiple types of clouds and most procedurally generated clouds are purely noised based I aim to produce a cumulus cloud, with some inspirations being images shown below:
+There are multiple types of clouds and most procedurally generated clouds are purely noised based without using sdfs, which usually results in Stratiform clouds. They are able to achieve such shapes by overlaying worley noise with FBM to create roughly cloud-like shapes, but it is harder to clearly define shapes in this way. I aim to produce cumulus clouds by basing the cloud shapes on ellipsoids, which can be characterized by more defined edges and harsher contrast/shading. Some inspirations being images shown below:
 
 ![](Images/Inspiration_1.jpg)
 ![](Images/Inspiration_2.jpg)
 
 ## Progress Review
-Rough rendering
+Rough rendering with FBM noise offsets.
 ![](Images/Progress_1.png)
 
 Improved lighting
