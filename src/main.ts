@@ -13,6 +13,8 @@ import ShaderProgram, {Shader} from './rendering/gl/ShaderProgram';
 const controls = {
   tesselations: 5,
   'Load Scene': loadScene, // A function pointer, essentially
+  'Scene': 'Sunny',
+  'GodRay': 'On',
 };
 
 let square: Square;
@@ -57,6 +59,8 @@ function main() {
 
   // Add controls to the gui
   const gui = new DAT.GUI();
+  gui.add(controls, 'Scene', ['Sunny', 'Gloomy']);
+  gui.add(controls, 'GodRay', ['On', 'Off']);
 
   // get canvas and webgl context
   const canvas = <HTMLCanvasElement> document.getElementById('canvas');
@@ -71,7 +75,11 @@ function main() {
   // Initial call to load scene
   loadScene();
 
-  const camera = new Camera(vec3.fromValues(0, 0, -10), vec3.fromValues(0, 0, 0));
+
+  let camera = new Camera(vec3.fromValues(0, -8, -15), vec3.fromValues(0, -5, 0));
+  if (controls.Scene == "Gloomy") {
+    camera = new Camera(vec3.fromValues(0, -2, -5), vec3.fromValues(0, 0, 0));
+  }
 
   const renderer = new OpenGLRenderer(canvas);
   renderer.setClearColor(164.0 / 255.0, 233.0 / 255.0, 1.0, 1);
@@ -96,9 +104,22 @@ function main() {
     gl.viewport(0, 0, window.innerWidth, window.innerHeight);
     renderer.clear();
     processKeyPresses();
+    let scene, godray;
+    if (controls.Scene == "Sunny") {
+      scene = 1;
+    } else if (controls.Scene == "Gloomy") {
+      scene = 2;
+    }
+
+    if (controls.GodRay == "On") {
+      godray = 1;
+    } else if (controls.GodRay == "Off") {
+      godray = 2;
+    }
+
     renderer.render(camera, flat, [
       square,
-    ], time);
+    ], scene, time);
     time++;
     stats.end();
 

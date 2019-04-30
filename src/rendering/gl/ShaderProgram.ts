@@ -29,6 +29,7 @@ class ShaderProgram {
   unifUp: WebGLUniformLocation;
   unifDimensions: WebGLUniformLocation;
   unifTime: WebGLUniformLocation;
+  unifScene: WebGLUniformLocation;
   // unifSampler1: WebGLUniformLocation;
   // unifSampler2: WebGLUniformLocation;
 
@@ -49,6 +50,7 @@ class ShaderProgram {
     this.unifUp   = gl.getUniformLocation(this.prog, "u_Up");
     this.unifDimensions   = gl.getUniformLocation(this.prog, "u_Dimensions");
     this.unifTime   = gl.getUniformLocation(this.prog, "u_Time");
+    this.unifScene   = gl.getUniformLocation(this.prog, "u_Scene");
     // this.unifSampler1   = gl.getUniformLocation(this.prog, "u_NoiseTex1");
     // this.unifSampler2   = gl.getUniformLocation(this.prog, "u_NoiseTex2");
   }
@@ -80,12 +82,17 @@ class ShaderProgram {
     }
   }
 
-
-
   setTime(t: number) {
     this.use();
     if(this.unifTime !== -1) {
       gl.uniform1f(this.unifTime, t);
+    }
+  }
+
+  setScene(s: number) {
+    this.use();
+    if(this.unifScene !== -1) {
+      gl.uniform1i(this.unifScene, s);
     }
   }
 
