@@ -5,15 +5,23 @@ uniform vec3 u_Eye, u_Ref, u_Up;
 uniform vec2 u_Dimensions;
 uniform float u_Time;
 uniform int u_Scene;
+uniform int u_GodRay;
+
+uniform sampler2D u_NoiseTex1, u_NoiseTex2;
 
 in vec2 fs_Pos;
 in vec4 fs_LightVec;
 out vec4 out_Col;
 
 // ------- Globals ------- //
-vec3 sunDir = normalize( vec3(-4.0,2.0,-3.0) );
-
+vec3 sunDir1 = normalize(vec3(-3.0, 2.5, 1.0));
+vec3 sunDir2 = normalize(vec3(3.0,2., 1.0));//normalize(vec3(2.0, 0.5, -1.0));
+// vec3 sunDir2 = normalize(vec3(0., 2.5, 1.0));//normalize(vec3(2.0, 0.5, -1.0));
+vec3 cloudDir1 = normalize(vec3(3.0, 0.0, -3.0));
+vec3 cloudDir2 = normalize(vec3(1.0, 0.0, 1.0));
+float speed = 0.02;
 // ------- Constants ------- //
+
 #define PI = 3.1415926535897932384626433832795;
 
 
@@ -52,7 +60,6 @@ float interpNoise2D( float x, float y, vec2 seed) {
 	float i1 = mix(v1, v2, fractX);
 	float i2 = mix(v3, v4, fractY);
 	return mix(i1, i2, fractY);
-
 }
 
 mat3 m = mat3( 0.00,  0.80,  0.60,
@@ -70,14 +77,13 @@ float noise( in vec3 x )
 
     f = f*f*(3.0-2.0*f);
 
-    float n = p.x + p.y*57.0 + 113.0*p.z;
-
-    // texture(u_NoiseTex1, uv - vec2(0.0, u_Time * 0.01)).r - 1.0;
+    float n = p.x + p.y* 57.0 + 113.0 * p.z;
 
     float res = mix(mix(mix( hash(n+  0.0), hash(n+  1.0),f.x),
                         mix( hash(n+ 57.0), hash(n+ 58.0),f.x),f.y),
                     mix(mix( hash(n+113.0), hash(n+114.0),f.x),
                         mix( hash(n+170.0), hash(n+171.0),f.x),f.y),f.z);
+
     return res;
 }
 
@@ -142,12 +148,11 @@ float rand(vec3 co)
 	return fract(sin(dot(co.xyz, vec3(12.9898, 78.233, 56.787))) * 43758.5453);
 }
 
-// Noise functions
-//
+//----------------------------------------------------------------------------//
 // Hash without Sine by DaveHoskins
-//
 // https://www.shadertoy.com/view/4djSRW
-//
+//----------------------------------------------------------------------------//
+
 float hash12( vec2 p ) {
     p  = 50.0*fract( p*0.3183099 );
     return fract( p.x*p.y*(p.x+p.y) );
@@ -189,7 +194,27 @@ float valueNoise( in vec3 x, float tile ) {
                         valueHash(mod(p+vec3(1,1,1),tile)),f.x),f.y),f.z);
 }
 
-// ------- SDF & Ray Marching Core Functions ------- //
+
+// iq's noise
+float pn( in vec3 x )
+{
+    vec3 p = floor(x);
+    vec3 f = fract(x);
+	f = f*f*(3.0-2.0*f);
+	vec2 uv = (p.xy+vec2(37.0,17.0)*p.z) + f.xy;
+	vec2 rg = textureLod( u_NoiseTex2, (uv+ 0.5)/256.0, 0.0 ).yx;
+	return -1.0+2.4*mix( rg.x, rg.y, f.z );
+}
+
+
+float fpn(vec3 p)
+{
+   return pn(p*.06125)*.5 + pn(p*.125)*.25 + pn(p*.25)*.125;
+}
+
+//----------------------------------------------------------------------------//
+// SDF & Ray Marching Core                                                    //
+//----------------------------------------------------------------------------//
 float opU( float d1, float d2 ) { return min(d1,d2); }
 float opS( float d1, float d2 ) { return max(-d1,d2); }
 
@@ -211,6 +236,7 @@ float singleCloud(vec3 pnt, vec3 offset) {
 float mapCloud(vec3 pnt) {
 
   float c = fbm(pnt);//noiseTexture(pnt);
+  // float c = Clouds(pnt);
   vec4 offset = vec4(c, c, c, c);
   // vec4 offset = vec4(0.);
 
@@ -222,22 +248,80 @@ float mapCloud(vec3 pnt) {
     res = opU(res, singleCloud(pnt + vec3(10.0, 0.0, -10.0), offset.xyz));
     res = opU(res, singleCloud(pnt + vec3(-10.0, 0.0, 0.0), offset.xyz));
 
+    res = opU(res, singleCloud(pnt + vec3(-10.0, -4.0, -12.0), offset.xyz));
+    res = opU(res, singleCloud(pnt + vec3(7.0, -6.0, -10.0), offset.xyz));
+    res = opU(res, singleCloud(pnt + vec3(10.0, -4.0, -12.0), offset.xyz));
+    res = opU(res, singleCloud(pnt + vec3(20.0, -3.0, -8.0), offset.xyz));
+    res = opU(res, singleCloud(pnt + vec3(-23.0, -3.0, -9.0), offset.xyz));
+
+    res = opU(res, singleCloud(pnt + vec3(25.0, 0.0, 12.0), offset.xyz));
+
+    // res = opU(res, singleCloud(pnt + vec3(10.0, 10.0, 5.0), offset.xyz));
+    res = opU(res, singleCloud(pnt + vec3(10.0, 0.0, 3.0), offset.xyz));
+
+
+    vec3 og_pnt  = pnt;
+    if (u_Time == 12.0) {
+      vec3 negOffset = cloudDir1 * speed * u_Time;
+      pnt -= negOffset;
+    }
+    if (u_Time >= 12.0) {
+      // res = opU(res, singleCloud(pnt + vec3(25.0, 10.0, 10.0), offset.xyz));
+      // res = opU(res, singleCloud(pnt + vec3(10.0, 0.0, 5.0), offset.xyz));
+      // res = opU(res, singleCloud(pnt + vec3(34.0, 0.0, 15.0), offset.xyz));
+      res = opU(res, singleCloud(pnt + vec3(28.0, 0.0, 10.0), offset.xyz));
+
+      res = opU(res, singleCloud(pnt + vec3(30.0, -5.0, 12.0), offset.xyz));
+      // res = opU(res, singleCloud(og_pnt + vec3(25.0, 0.0, 15.0), offset.xyz));
+    }
+
+
   } else { // GLOOMY
 
-    res = singleCloud(pnt + vec3(10.0, -1.0, 1.0), offset.xyz); // front left
-    res = opU(res, sdEllipsoid(pnt + vec3(4.0, 3.0, -15) + offset.xyz * 4.0, vec3(20, 15, 5))); // gigantic background one
+    res = singleCloud(pnt + vec3(15.0, -1.0, -1.0), offset.xyz); // front left
+    //
+    float bp1 = opU(res, sdEllipsoid(pnt + vec3(4.0, 14.0, -15) + offset.xyz * 2.0, vec3(20, 15, 5))); // gigantic background one
+    float bp2 = opU(res, sdEllipsoid(pnt + vec3(-15, 16.0, -15) + offset.xyz * 2.0, vec3(15, 10, 5))); // gigantic background one
+    float bp3 = opU(res, sdEllipsoid(pnt + vec3(15, 10.0, -15) + offset.xyz * 2.0, vec3(15, 10, 5))); // gigantic background one
 
-    float chunk1 = sdEllipsoid(pnt + vec3(-4.0, -2.0, 1.0) + offset.xyz * 4.0, vec3(5, 4, 4)); // centerpiece one
-    float chunk2 = sdEllipsoid(pnt + vec3(-4.0, -2.0, 1.0) + offset.xyz * 4.0, vec3(10, 7, 5)); // centerpiece one
-    float chunk3 = sdEllipsoid(pnt + vec3(0.0, -2.0, 5.0) + offset.xyz * 4.0, vec3(2, 3, 5)); // centerpiece one
-    float chunk4 = sdEllipsoid(pnt + vec3(-2.0, -3.0, 3.0) + offset.xyz * 4.0, vec3(5, 4, 5)); // centerpiece one
+    float backpiece = opU(bp1, bp2);
+    backpiece = opU(backpiece, bp3);
+    res = opU(res, backpiece);
+
+    float chunk1 = sdEllipsoid(pnt + vec3(-3.0, -5.0, -3.) + offset.xyz * 2.0, vec3(5, 4, 4)); // centerpiece one
+    float chunk2 = sdEllipsoid(pnt + vec3(-3.0, -5.0, -3.0) + offset.xyz *2.0, vec3(10, 7, 5)); // centerpiece one
+    float chunk3 = sdEllipsoid(pnt + vec3(1.0, -5.0, 1.0) + offset.xyz *2.0, vec3(2, 3, 5)); // centerpiece one
+    float chunk4 = sdEllipsoid(pnt + vec3(-1.0, -6.0, -1.0) + offset.xyz * 2.0, vec3(5, 4, 5)); // centerpiece one
+    float chunk5 = sdEllipsoid(pnt + vec3(-9.0, -2.0, -2.0) + offset.xyz * 2.0, vec3(3, 3, 4)); // centerpiece one
 
     float centerpiece = opU(chunk1, chunk2);
     centerpiece = opU(centerpiece, chunk3);
     centerpiece = opU(centerpiece, chunk4);
+    centerpiece = opU(centerpiece, chunk5);
 
     res = opU(res, centerpiece);
+
+    for (int i = 1; i < 5; i++) {
+      res = opU(res, sdEllipsoid(pnt + vec3(2. - float(i)*9., -3.0, -7.) + offset.xyz * 2.0, vec3(7, 7, 5)));
+    }
+
+    for (int i = 1; i < 4; i++) {
+      res = opU(res, sdEllipsoid(pnt + vec3(0. - float(i)*9., 1.0, -8.5) + offset.xyz * 2.0, vec3(7, 7, 5)));
+    }
+
+    for (int i = 1; i < 3; i++) {
+      res = opU(res, sdEllipsoid(pnt + vec3(-4. - float(i)*10., 5.0, -10.) + offset.xyz * 2.0, vec3(7, 10, 5)));
+    }
+
+    //
+    // float farback = singleCloud(pnt + vec3(-20.0, -14.0, -17.0), offset.xyz);
+    //
+    // res = opU(res, farback);
+
+    // res = opU(res, b .);
+
   }
+
   return res;
 }
 
@@ -245,12 +329,73 @@ float map(vec3 og_pnt) {
   vec3 cloud_c = og_pnt * rotateZ(3.14) - vec3(0.0, 4., 5.0);
   float cloud = mapCloud(cloud_c);
   float res = cloud;
+
   return res;
 }
 
 
-// ** Volumetric Integration ** //
-float PowderEff(float DenSample, float cosAngle, float DenCoef, float PowderCoef) {
+//----------------------------------------------------------------------------------------
+
+float Noise3D(vec3 p)
+{
+    vec2 e = vec2(0.0, 1.0);
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+
+    float x0 = mix(rand(i + e.xxx), rand(i + e.yxx), f.x);
+    float x1 = mix(rand(i + e.xyx), rand(i + e.yyx), f.x);
+    float x2 = mix(rand(i + e.xxy), rand(i + e.yxy), f.x);
+    float x3 = mix(rand(i + e.xyy), rand(i + e.yyy), f.x);
+
+    float y0 = mix(x0, x1, f.y);
+    float y1 = mix(x2, x3, f.y);
+
+    float val = mix(y0, y1, f.z);
+
+    val = val * val * (3.0 - 2.0 * val);
+    return val;
+}
+
+vec4 godray(vec2 uv, float angle)
+{
+  vec2 ndc = (2.0 * gl_FragCoord.xy - u_Dimensions.xy) / u_Dimensions.y;
+  vec2 godRayOrigin = ndc + vec2(-1.5, -1.);
+  if (u_Scene == 2) godRayOrigin = ndc + vec2(0.8, -1.5);
+
+  float inputfunc = atan(godRayOrigin.y, godRayOrigin.x) * 0.7;
+  float light = inputfunc * 0.8 + 0.5;
+  light = 0.5 * (light+ (sin(inputfunc) * 0.5 ));
+  light *= pow(clamp(dot(normalize(-godRayOrigin), normalize(ndc - godRayOrigin)), 0.0, 1.0), 2.5);
+  light *= pow(uv.y, 1.1);
+  light = pow(light, 1.75);
+  return  vec4(vec3(light), 1.0);// * (1.0 - uv.y);
+}
+
+
+// const float EXPOSURE     = 2.5;
+// const float INV_GAMMA    = 1.0 / 2.2;
+//
+// // Uncharted 2 tone mapping
+// const float A = 0.15;
+// const float B = 0.50;
+// const float C = 0.10;
+// const float D = 0.20;
+// const float E = 0.02;
+// const float F = 0.30;
+// vec3 unchartedToneMapping(in vec3 x) {
+//     return ((x*(A*x + C*B) + D*E) / (x*(A*x + B) + D*F)) - E/F;
+// }
+// vec3 toneMapping(in vec3 x) {
+//     vec3 color = unchartedToneMapping(x*EXPOSURE);
+//     vec3 white = vec3(100);
+//     color *= 1.0 / unchartedToneMapping(white);
+//     return pow(color, vec3(INV_GAMMA));
+// }
+
+//----------------------------------------------------------------------------//
+// volumetric integration helpers                                             //
+//----------------------------------------------------------------------------//
+float powder(float DenSample, float cosAngle, float DenCoef, float PowderCoef) {
   float Powder = 1.0 - exp(-DenSample * DenCoef * 2.0);
   Powder = clamp(Powder * PowderCoef, 0.0, 1.0);
   return mix(1.0, Powder, smoothstep(0.5, -0.5, cosAngle));
@@ -264,7 +409,7 @@ float BeerLaw(float DenSample, float DenCoef)
 float henyeyGreenstein(float cosAngle, float g) {
   float g2 = g * g;
   float invPi = 0.31830988618;
-  return 0.25 * invPi * ((1.0 - g2) / pow(1.0 + g2 - 2.0*g*cosAngle, 3.0/2.0));
+  return 0.25 * invPi * ((1.0 - g2) / pow(1.0 + g2 - 2.0 * g * cosAngle, 3.0/2.0));
   // return phase;
 }
 
@@ -272,8 +417,14 @@ float beerLambert(float d) {
   return max(exp(-d), 0.7*exp(-0.25*d));
 }
 
+//----------------------------------------------------------------------------//
+// lighting                                                                  //
+//----------------------------------------------------------------------------//
 vec3 shadeSky( vec3 rd )
 {
+    vec3 sunDir = sunDir1;
+    if (u_Scene == 2) sunDir = sunDir2;
+
     vec3 color = vec3(0.0);
     vec3 skyColor, sunColor;
     if (u_Scene == 1) {
@@ -282,200 +433,167 @@ vec3 shadeSky( vec3 rd )
       float sunDot = clamp(dot(sunDir, rd), 0.0, 1.0);
       color += sunColor * pow(sunDot, 17.0);
     } else if (u_Scene == 2) {
-      skyColor =vec3(3./255., 19./255., 44./255.);// vec3(29./255., 44./255.,67./255.);
-      sunColor = vec3(0.3, 0.3, 0.6); // not super distinct. act as lightsource.
+      // skyColor =vec3(26./255., 42./255., 68./255.);
+    // sunColor = vec4(204./255., 222./255., 249./255., 1.0);;//vec4(1.0, 0.58, 0.3, 1.0);
+
+      skyColor =vec3(3./255., 19./255., 44./255.); // vec3(29./255., 44./255.,67./255.);
+      sunColor = vec3(204./255., 222./255., 249./255.);;//vec4(1.0, 0.58, 0.3, 1.0);
+      // sunColor = vec3(161./255., 191./255., 224./255.);
+
+      // sunColor = vec3(0.3, 0.3, 0.6); // not super distinct. act as lightsource.
+      float sunDot = clamp(dot(sunDir, rd), 0.0, 1.0);
+      color += sunColor * pow(sunDot, 17.0);
     }
     color += skyColor;
     return color;
 }
+//
+// float rand(vec2 co) {
+//     return fract(sin(dot(co*0.123,vec2(12.9898,78.233))) * 43758.5453);
+// }
 
-float rand(vec2 co)
-{
-    return fract(sin(dot(co*0.123,vec2(12.9898,78.233))) * 43758.5453);
+float getScatter(float cosAngle, float fg, float bg, float hg) {
+
+  float fwdScatter = henyeyGreenstein(cosAngle, fg);
+  float bkwdScatter = henyeyGreenstein(cosAngle, bg);
+  float totalHGPhase = (hg * fwdScatter) + ((1. - hg) * bkwdScatter);
+  return totalHGPhase;
+  // return fwdScatter;
 }
 
 
+float getAbsorbedLight(vec3 pos, float den, float cosAngle, out float sden) {
+  vec3 sunDir = sunDir1;
+  if (u_Scene == 2) sunDir = sunDir2;
+
+  // Absorption
+  // float sden;
+  float stepsize = 0.1;
+  for (int i = 0; i < 3; i++) {
+      vec3 lsPos = pos + stepsize * float(i) * sunDir;
+      if (map(lsPos) < EPSILON) {
+        float lsDen = fbm(lsPos);
+        if (lsDen > 0.0) {
+            sden += lsDen;
+        }
+      }
+  }
+  return beerLambert(sden);
+}
+
+//----------------------------------------------------------------------------//
+// rendering                                                                  //
+//----------------------------------------------------------------------------//
 vec4 raymarch(vec3 ro, vec3 rd, float start, float maxd, out float res) {
 
+  // set oup variables
+  vec3 sunDir, cloudDir;
+  if (u_Scene == 1)
+  {
+    cloudDir = cloudDir1;
+    sunDir = sunDir1;
+  } else {
+    cloudDir = cloudDir2;
+    sunDir = sunDir2;
+  }
 
   // background sky
   vec3 colSky = vec3(0.6,0.71,0.75) - rd.y*0.2*vec3(1.0,0.5,1.0) + 0.15*0.5;
   float sun = clamp(dot(sunDir,rd), 0.0, 1.0);
   colSky += 0.25 * vec3(1.0,.6,0.1) * pow(sun, 8.0) + 2.0 * vec3(1.0,.6,0.1) * pow(sun, 1.0);
 
-
   vec4 sum = vec4(0.0);
 
   // setup ray marching variables
   float t             = start;
-  float dt;
+  float dt            = 0.5;
   float alpha         = 0.0; // acculmulated density.
   float transmittance = 1.0;
 
   // Lighting Variables
   //based on "Real-Time Volumetric Cloudscapes" by Andrew Schneider
   const float FwdSctG   = 0.5;
-  const float BckwdSctG = - 0.02;
-  const float HGCoef    = .1;
+  const float BckwdSctG = -0.1;
+  const float HGCoef    = .8;
   const float DenCoef   = .75;
   const float PowderCoef = 1.3;
 
   float cosAngle = dot(normalize(rd), normalize(sunDir));
-  float FwdSctHG = henyeyGreenstein(cosAngle, FwdSctG);
-  float BckwdSctHG = henyeyGreenstein(cosAngle, BckwdSctG);
-  float TotalHGPhase = (HGCoef * FwdSctHG) + ((1. - HGCoef) * BckwdSctHG);
+  float scatter = getScatter(cosAngle, FwdSctG, BckwdSctG, HGCoef);
 
-
-  // const vec3 CloudBaseColor = vec3(0.52, 0.67, 0.82);
-  // const vec3 CloudTopColor = vec3(0.52, 0.67, 0.82);
-
+  vec3 bg = shadeSky(rd);
   for (int i = 0; i < MAX_MARCHING_STEPS; i++)
   {
 
-    if (t >= maxd || sum.a > 0.99) break;
-
-    vec3 pos = ro + t * rd;
+    vec3 pos = ro + t * rd + cloudDir * speed * u_Time;
+    if (t >= maxd) break;
+    if (sum.a > 0.99) {
+      sum.a = 1.00;
+      break;
+    }
 
     float den = fbm(pos);
+    float res;
     if (den > 0.01) {
-      float res = map(pos);
+
+      res = map(pos);
+
+
       if (res < EPSILON) {
 
-        float tden;
-        //Sample light propogation for Beer's law
-        float stepsize = 0.1;
-        for (int i = 0; i < 3; i++) {
-            vec3 lsPos = pos + stepsize * float(i) * sunDir;
-            if (map(lsPos) < EPSILON) {
-              float lsDensity = fbm(lsPos);
-              if (lsDensity > 0.0) {
-                  tden += lsDensity;
-              }
-            }
-        }
-        // float beer = beerLambert(-tden);
-        // float beer = BeerLaw(ld, DenCoef);
+        // Absorption
+        float sden;
+        float beer = getAbsorbedLight(pos, den, cosAngle, sden);
 
-        // float ext = exp(-scatteringCoeff * den * dt);
-        // transmittance *= ext;
+        float ext = exp(-0.5 * sden * 0.1);
+        transmittance *= ext;
 
-      //  vec3 lin = vec3(1.0);//vec3(0.65,0.7,0.75)*1.4; //+ vec3(1.0, 0.6, 0.3)*dif;
-        vec3 tmp_pos = pos + 0.3 * sunDir;
-        float dif =  clamp((den - fbm(tmp_pos))/0.6, 0.0, 1.0 );
-        vec3 lin = vec3(0.65,0.7,0.75)*1.4 + vec3(1.0, 0.6, 0.3)*dif;
+        float powder = powder(exp(-den), cosAngle, DenCoef, PowderCoef);
 
-        float powder = PowderEff(exp(-res), cosAngle, DenCoef, PowderCoef);
-        // float d = distance(pos, u_Eye);
-        float beer = beerLambert(den);
-        vec4 col= vec4(lin * TotalHGPhase * powder * beer, den);// + colSky * 0.05, d_remaped);
-        col.xyz = mix( col.xyz, BLUE, 1.0-exp(-0.003*t*t) );
+        vec3 light = vec3(0.6, 0.55, 0.4)* 50.0;
+        float lightE = scatter * beer * powder;
 
-        // lighting
-        // vec3 tmp_pos = pos + 0.3 * sunDir;
-        // float dif =  clamp((den - fbm(tmp_pos))/0.6, 0.0, 1.0 );
-        // vec3 lin = vec3(0.65,0.7,0.75)*1.4 + vec3(1.0, 0.6, 0.3)*dif;
-        // vec4 col = vec4( mix( vec3(1.0,0.95,0.8), vec3(0.25,0.3,0.35), den ), den );
-        // col.xyz *= lin;
-        // col.xyz = mix( col.xyz, BLUE, 1.0-exp(-0.003*t*t) );
-        // front to back blending
-        col.a *= 0.4;
+        vec4 col;
+        col.xyz = 0.5 * light * lightE * transmittance; // * Dt? //(vec3(1.) - ext) * (WHITE * beer * TotalHGPhase * powder) * transmittance;
+        col.a = 1. - transmittance;
+
+        // // front to back blending
+        if (u_Scene == 1) col.xyz = mix( col.xyz, bg *0.9 +  WHITE * 0.1, 1.0-exp(-0.003*t*t));
+        else col.xyz = mix( col.xyz, bg *0.5 +  WHITE * 0.5, 1.0-exp(-0.003*t*t));
+
+        col.a *= 0.35;
         col.rgb *= col.a;
-        sum += col*(1.0-sum.a);
+        sum +=  col*(1.0-sum.a);
+
+        if (alpha > 1.) {
+          alpha = 1.0;
+          break;
+        }
+
       }
     }
+
     dt = max(0.05, 0.02 * t);
     t += dt;
   }
-  // return sum;
-  vec3 bg = shadeSky(rd);
-  return vec4((1. - sum.a) * bg + sum.xyz, 1.0);
-  // return vec4(mix(sum.xyz, bgCol, 1. - sum.a), 1.0);
 
-  // sum.xyz = colSky * (1.0-sum.w) + sum.xyz;
-  // // small color adjustment
-  // sum.xyz *= 1. / exp( ld * 0.05 ) * .85;
-  // sum.xyz = sum.xyz*sum.xyz*(3.0-2.0*clamp(sum.xyz,0.0,1.0));
-  // return sum;
+  return vec4((1. - sum.a) * bg + sum.xyz, 1.0);
 }
 
-  // return clamp( sum, 0.0, 1.0 );
-  // float t = start; // aka. depth
-  // float transmittance = 1.0;
-  // float dt;
-  // vec3 pos;
-  // vec4 color = vec4(0.0);
-  // float scatteringCoeff = 0.5;
-  //
-  // pos = ro + t * rd;
-  // float density = noiseTexture(pos);
-  //
-	// for (int i = 0; i < MAX_MARCHING_STEPS; i++) {
-  //
-  //   if(color.a > 0.99 ) break;
-  //   float accumDensity = 0.0;
-  //
-  //   res = map(pos);
-  //
-	// 	if (res < EPSILON) {
-  //
-  //     // transmittance *= exp(-scatteringCoeff * density * dt);
-  //     // color.xyz = BLUE;
-  //     color.xyz = WHITE;
-  //     color.a = density;//transmittance;
-  //
-  //     // Compute samples toward light source
-  //     // float stepSize = 0.1;
-  //     // vec3 light = vec3(0.6, 0.55, 0.4) * 50.0;
-  //     //
-  //     // float accumDensity = 0.0;
-  //     // accumDensity += noiseTexture(pos + dt * sunDir) * dt;
-  //     // vec3 incidentLight = light * exp(-scatteringCoeff * accumDensity * dt);
-  //     // color.xyz += scatteringCoeff * density * Phase(scatteringCoeff, abs(dot(rd, sunDir))) * incidentLight * transmittance * dt;
-  //
-  //     //**  beginning of lighting function **//
-  //     // color += lighting(accumDensity, );
-  //
-  //     // float scatteringCoeff = 0.5;
-  //     // vec4 light;
-  //     // // Sun
-  //     // // Background
-  //     //
-  //     // incidentLight = light * exp(-scatteringCoeff * accumDensity * stepSize);
-  //     //
-  //     // //Absorbed-light calculation
-  //     // light += sunColor * pL;
-  //     //
-  //     // // Scattered-light calculation
-  //     // light += scatteringCoeff * density * Phase(scatteringCoeff, abs(dot(rd, sunDir))) * incidentLight * transmittance * dt;
-  //     //
-  //     // // Front to back blending
-  //     // col.a *= 0.4;
-  //     // col.rgb *= col.a;
-  //     //
-  //     // // Calculate Cloud Color
-  //     // return sum + col*(1.0-sum.a);
-  //
-  //     // **  end of lighting function **//
-  //
-  //     //if (transmittance <= 0.01) break;
-  //   }
-  //   dt = max(0.05, 0.02 * t);
-  //   t += dt;
-	// 	if (t >= maxd) {break;}
-	// }
-	// return color;
+vec3 estimateNormal(vec3 p) {
+    return normalize(vec3(
+        map(vec3(p.x + EPSILON, p.y, p.z)) - map(vec3(p.x - EPSILON, p.y, p.z)),
+        map(vec3(p.x, p.y + EPSILON, p.z)) - map(vec3(p.x, p.y - EPSILON, p.z)),
+        map(vec3(p.x, p.y, p.z  + EPSILON)) - map(vec3(p.x, p.y, p.z - EPSILON))
+    ));
+}
 
-
-//  TODO: ADD GOD RAYS
 
 vec4 render(vec3 ro, vec3 rd) {
+  vec3 sunDir = sunDir1;
+  if (u_Scene == 2) sunDir = sunDir2;
   vec4 col = vec4(1.0);
   float sun = clamp( dot(sunDir,rd), 0.0, 1.0 );
-  // col.xyz = vec3(0.6,0.71,0.75) - rd.y*0.2*vec3(1.0,0.5,1.0) + 0.15*0.5;
-  // col.xyz += 0.2*vec3(1.0,.6,0.1) * pow( sun, 8.0 );
-  // //clouds
-  // vec4 res = raymarch(ro, rd, MIN_DIST, MAX_DIST);
-  // col = col*(1.0-res.w) + res.xyz;
 
   float res;
   vec4 r_col = raymarch(ro, rd, MIN_DIST, MAX_DIST, res);
@@ -485,16 +603,34 @@ vec4 render(vec3 ro, vec3 rd) {
     col.a = r_col.a;
   }
 
-  //sun glare
-  // col.xyz += 0.2 * vec3(1.0,0.4,0.2) * pow( sun, 3.0 );
+  // sun glare
+  col.xyz += 0.2 * vec3(1.0,0.4,0.2) * pow( sun, 3.0 );
 
-
-  // TODO: God rays
+  if (u_GodRay == 1) {
+    vec2 uv;
+    uv.x  = gl_FragCoord.x / u_Dimensions.x;
+    uv.y = gl_FragCoord.y/ u_Dimensions.y;
+    vec4 gr = godray(uv, 10.);
+    vec4 sunColor = vec4(1.0, 0.58, 0.3, 1.0);
+    if (u_Scene == 2) sunColor = vec4(204./255., 222./255., 249./255., 1.0);;//vec4(1.0, 0.58, 0.3, 1.0);
+    col += gr *sunColor;
+  }
   return col;
+  // if (u_Scene == 2) {
+  //   return vec4(toneMapping(col.xyz), 1.0);
+  // } else {
+  //   return col;
+  // }
+  // vec3 rp = ro + res * rd;
+  // vec3 n = estimateNormal(rp);
+  // col.xyz+=pow(clamp(-n.y, 0.0,1.0),2.)*WHITE/1.5;
 
 }
 
-// ------- Ray March Direction Calc ------- //
+
+//----------------------------------------------------------------------------//
+// ray setup                                                                  //
+//----------------------------------------------------------------------------//
 vec3 calculateRayMarchPoint() {
   vec3 forward = u_Ref - u_Eye;
 	vec3 right = normalize(cross(u_Up, forward));

@@ -22,10 +22,11 @@ class OpenGLRenderer {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   }
 
-  render(camera: Camera, prog: ShaderProgram, drawables: Array<Drawable>, scene: number, time: number) {
+  render(camera: Camera, prog: ShaderProgram, drawables: Array<Drawable>, scene: number, godray: number, time: number) {
     prog.setEyeRefUp(camera.controls.eye, camera.controls.center, camera.controls.up);
     prog.setTime(time);
     prog.setScene(scene);
+    prog.setGodray(godray)
 
     for (let drawable of drawables) {
       prog.draw(drawable);

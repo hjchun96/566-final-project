@@ -1,6 +1,7 @@
 import {vec2, vec3, vec4, mat4} from 'gl-matrix';
 import Drawable from './Drawable';
 import {gl} from '../../globals';
+import Texture from './Texture';
 
 var activeProgram: WebGLProgram = null;
 
@@ -30,8 +31,9 @@ class ShaderProgram {
   unifDimensions: WebGLUniformLocation;
   unifTime: WebGLUniformLocation;
   unifScene: WebGLUniformLocation;
-  // unifSampler1: WebGLUniformLocation;
-  // unifSampler2: WebGLUniformLocation;
+  unifGodray: WebGLUniformLocation;
+  unifSampler1: WebGLUniformLocation;
+  unifSampler2: WebGLUniformLocation;
 
   constructor(shaders: Array<Shader>) {
     this.prog = gl.createProgram();
@@ -51,6 +53,8 @@ class ShaderProgram {
     this.unifDimensions   = gl.getUniformLocation(this.prog, "u_Dimensions");
     this.unifTime   = gl.getUniformLocation(this.prog, "u_Time");
     this.unifScene   = gl.getUniformLocation(this.prog, "u_Scene");
+    this.unifGodray   = gl.getUniformLocation(this.prog, "u_GodRay");
+    //
     // this.unifSampler1   = gl.getUniformLocation(this.prog, "u_NoiseTex1");
     // this.unifSampler2   = gl.getUniformLocation(this.prog, "u_NoiseTex2");
   }
@@ -60,6 +64,14 @@ class ShaderProgram {
       gl.useProgram(this.prog);
       activeProgram = this.prog;
     }
+  }
+
+  // Bind the given Texture to the given texture unit
+  bindTexToUnit(handleName: WebGLUniformLocation, tex: Texture, unit: number) {
+    this.use();
+    gl.activeTexture(gl.TEXTURE0 + unit);
+    tex.bindTex();
+    gl.uniform1i(handleName, unit);
   }
 
   setEyeRefUp(eye: vec3, ref: vec3, up: vec3) {
@@ -93,6 +105,13 @@ class ShaderProgram {
     this.use();
     if(this.unifScene !== -1) {
       gl.uniform1i(this.unifScene, s);
+    }
+  }
+  
+  setGodray(r: number) {
+    this.use();
+    if(this.unifGodray !== -1) {
+      gl.uniform1i(this.unifGodray, r);
     }
   }
 
